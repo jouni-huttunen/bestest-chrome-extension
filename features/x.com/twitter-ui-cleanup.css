@@ -1,0 +1,36 @@
+/* twitter-ui-cleanup: hide unused X UI. See SPEC.md section 8.3. */
+
+/* ── Left navigation (8.3.1 #1–8) ──────────────────────────────────────
+   Deliberately NOT scoped to nav[aria-label="Primary"], so these also
+   match the collapsed icon-only sidebar, the mobile bottom bar and the
+   floating compose button. */
+a[data-testid="AppTabBar_Notifications_Link"],
+a[data-testid="AppTabBar_DirectMessage_Link"],
+a[data-testid="AppTabBar_Calls_Link"],
+a[href="/i/grok"][aria-label="Grok"],
+a[aria-label="Creator Studio"],
+a[data-testid="premium-signup-tab"],
+a[href="/follower_requests"][aria-label^="Follower requests"],
+[data-testid="SideNav_NewTweet_Button"],
+a[href="/compose/post"],
+
+/* ── Floating drawers, bottom-right (8.3.1 #9–10) ──────────────────── */
+[data-testid="GrokDrawer"],
+[data-testid="chat-drawer-root"],
+
+/* ── Right sidebar (8.3.1 #11–14) ──────────────────────────────────────
+   Hide each module's wrapper card (removes padding/border/gap), with
+   the module itself as a fallback if the wrapper nesting changes. */
+[data-testid="sidebarColumn"] [aria-label="Trending"] > div > div:has(aside[aria-label="Subscribe to Premium"]),
+[data-testid="sidebarColumn"] [aria-label="Trending"] > div > div:has([data-testid="news_sidebar"]),
+[data-testid="sidebarColumn"] [aria-label="Trending"] > div > div:has([aria-label="Timeline: Trending now"]),
+[data-testid="sidebarColumn"] aside[aria-label="Subscribe to Premium"],
+[data-testid="sidebarColumn"] [data-testid="news_sidebar"],
+[data-testid="sidebarColumn"] section:has([aria-label="Timeline: Trending now"]),
+nav[aria-label="Footer"],
+
+/* ── Grok button in each post (8.3.1 #15) ──────────────────────────────
+   Hide the wrapper div so no gap remains next to the ⋯ menu. */
+article[data-testid="tweet"] div:has(> button[aria-label="Grok actions"]) {
+  display: none !important;
+}

@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Bestest Chrome Extension",
+  "version": "0.3.0",
+  "description": "Personal site customizations, loaded unpacked.",
+  "minimum_chrome_version": "111",
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["https://x.com/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": {
+    "default_title": "Bestest Chrome Extension",
+    "default_popup": "popup/popup.html"
+  }
+}

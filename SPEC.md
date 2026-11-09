@@ -12,10 +12,9 @@ according to the owner's instructions. Each customization is a **feature**
 scoped to one site. Features are added over time; each one is specified in
 section 8 before it is implemented.
 
-The extension is installed only via **Load unpacked**. The owner's everyday
-install is the `release/` folder, the production release (9.1). Changes that
-aren't released yet are tested by loading the project root, which loads as-is
-(9.3).
+The extension is installed only via **Load unpacked**, directly from the
+project root, which loads in Chrome as-is (section 9). The project root is the
+extension's only source.
 
 ## 2. Non-goals
 
@@ -34,9 +33,8 @@ aren't released yet are tested by loading the project root, which loads as-is
 1. **Manifest V3**, with `"minimum_chrome_version": "111"`. MAIN-world content
    scripts are fully supported from this version.
 2. **Plain modern JavaScript.** No build step, no npm, no bundler, no
-   TypeScript, no third-party code. The folder must load in Chrome as-is. The
-   release folder (9.1) is a plain copy of the runtime files, not a build: no
-   file is transformed.
+   TypeScript, no third-party code. The project root must load in Chrome
+   as-is.
 3. **Minimal permissions.** Exactly `storage` and `scripting`, plus
    `host_permissions` for the sites the features run on. Section 5.1 explains
    why. A feature may add another permission only if its spec section names it
@@ -71,11 +69,10 @@ aren't released yet are tested by loading the project root, which loads as-is
 
 ```
 /
+├── README.md                    short human guide: purpose and installation
 ├── SPEC.md                      this file
 ├── AGENTS.md                    rules for coding agents
 ├── CLAUDE.md                    imports AGENTS.md for Claude Code
-├── build-release.ps1             builds release/ when the owner asks for a release (9.1)
-├── release/                     production release; rebuilt only on the owner's request
 ├── manifest.json
 ├── background.js                service worker: registers enabled features (5.3)
 ├── popup/
@@ -94,8 +91,10 @@ aren't released yet are tested by loading the project root, which loads as-is
   `twitter-media-grid-restore` → `features/x.com/twitter-media-grid-restore.js`.
   The exact paths are listed in the registry (section 6).
 
-No other files are required. A README is optional; if present it must not
-contradict this spec.
+No other files are required. `README.md` is a short introduction for people;
+it must not contradict this spec, and this spec wins if they ever disagree.
+The documentation files (`README.md`, `SPEC.md`, `AGENTS.md`, `CLAUDE.md`)
+are ignored by Chrome and load harmlessly alongside the extension.
 
 ## 5. Manifest and extension shell
 
@@ -261,9 +260,7 @@ owner can confirm the reloaded code is the new code.
 4. Add or update its entry in `features/registry.js` (5.4). If it runs on a new
    site, add that site's matches to `host_permissions` (5.1).
 5. Bump the extension version and add a changelog line (section 11).
-6. Do **not** rebuild `release/`. The change reaches it only when the owner
-   asks for a new release (9.1).
-7. To remove a feature permanently, delete its file(s), its `registry.js`
+6. To remove a feature permanently, delete its file(s), its `registry.js`
    entry, its registry row, and its section 8 entry, then note the removal in
    the changelog.
 
@@ -1194,58 +1191,31 @@ either way.
 
 ## 9. Install, update, remove
 
-### 9.1 Release folder (production)
+The project root (the folder containing `manifest.json`) is the extension. It
+loads in Chrome as-is (constraint 2): there is no build step and no separate
+copy to keep in sync.
 
-`release/` holds the **production release**: the version the owner actually
-uses day to day. It contains only the files the extension needs at runtime, so
-documentation and tooling never ship with it.
-
-- **Updated only on request.** `release/` is rebuilt **only when the owner
-  explicitly asks for a new release.** It is never rebuilt as part of a
-  feature, fix, refactor, or spec change, even when that change is finished
-  and tested. Between releases, the source files may be ahead of `release/`.
-- **Contents:** exactly `manifest.json`, `background.js`, `popup/`, and
-  `features/` (everything under it), copied unchanged from the project root.
-  Nothing else. If a new runtime file or folder is added at the root, add it to
-  this list and to the script's `$items` list.
-- **Building a release** (only when asked):
-  1. Run `.\build-release.ps1` from the project root in PowerShell. It empties
-     `release/` (keeping the folder itself, so the path Chrome loaded stays
-     valid), copies the items above, and prints the version and file count,
-     e.g. `Built release/ (version 0.3.0, 9 files).`
-  2. Add a changelog line (section 11): `Released <version> to release/.`
-  3. Tell the owner to click reload on the release extension's card in
-     `chrome://extensions` and reload affected tabs.
-- **Never edit files in `release/` directly.** Change the source files, and
-  the change ships with the next release.
-
-### 9.2 Install the production release
+### 9.1 Install
 
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and select the `release` folder.
+3. Click **Load unpacked** and select the project root.
 4. Pin the extension (puzzle-piece menu → pin) so its popup is one click away.
    All features start enabled.
 
 **Switch a feature on or off:** open the popup, flip the feature's switch, then
 click **Reload tabs** (or reload the site's tabs yourself).
 
-### 9.3 Test unreleased changes
+### 9.2 Update after a change
 
-The project root loads in Chrome as-is (constraint 2), so it serves as the
-development copy:
-
-1. In `chrome://extensions`, turn off the release extension's card, so the two
-   copies don't run on the same pages.
-2. **Load unpacked** the project root (the folder containing `SPEC.md`). It
-   appears as a second card with the same name.
-3. After changing any file, click the reload icon on the development card.
-   This also re-runs `sync()` (5.3), so new or renamed features get
-   registered. Then reload every affected tab. Already-open tabs keep the old
-   script until reloaded, and `document_start` features need a full reload,
-   not in-app navigation.
-4. When done, turn the development card off and the release card back on.
-   When the changes are good, ask for a new release (9.1).
+1. After changing any file (or pulling new commits), click the reload icon on
+   the extension's card in `chrome://extensions`. This also re-runs `sync()`
+   (5.3), so new or renamed features get registered.
+2. Reload every affected tab. Already-open tabs keep the old script until
+   reloaded, and `document_start` features need a full reload, not in-app
+   navigation.
+3. Optional: check the feature's verification marker (its revision, section 6)
+   to confirm the new code is running.
 
 **Remove:** click **Remove** on the extension's card, then reload affected tabs.
 The on/off state is deleted along with the extension.
@@ -1282,11 +1252,10 @@ Current extension version: **0.4.3**
 | 2026-11-03 | 0.2.0 | Feature `twitter-easy-block` (revision 1) specified. Not yet implemented. |
 | 2026-11-03 | 0.3.0 | Feature `twitter-ui-cleanup` (revision 1) specified. Per-feature on/off switches added (popup, service worker, `storage` + `scripting` permissions); features are now registered at runtime instead of in the manifest. Not yet implemented. |
 | 2026-11-03 | 0.3.0 | First implementation of the shell and all three features. Clarified during the build: Easy Block re-checks the show rule when the countdown ends (8.2.5), and back-to-back block jobs keep X's popups hidden (8.2.6). Not yet verified on live x.com; the 8.3.5 open checks are still open. |
-| 2026-11-03 | 0.3.0 | Added `release/` (the production release, rebuilt only when the owner asks) and `build-release.ps1` (9.1). No change to extension behavior. |
-| 2026-11-03 | 0.3.0 | Released 0.3.0 to release/. |
 | 2026-11-09 | 0.3.1 | Fix: `twitter-easy-block` (revision 2) re-places an idle block button in front of the Grok wrapper when X renders Grok after the caret, so the button no longer stacks above `⋯` on scrolled-in feed posts and `/status/…` pages (8.2.4, 8.2.7, 8.2.9). Live check on 0.3.0 before the fix: 32 of 36 posts loaded while scrolling were misplaced. |
 | 2026-11-09 | 0.4.0 | `twitter-easy-block` (revision 3): profile pages of accounts you don't follow get the block button directly left of the header's `⋯` (new 8.2.10). Handles blocked during the page session lose their buttons everywhere on the page (8.2.3). Minor bump because this adds behavior rather than fixing it. |
 | 2026-11-09 | 0.4.1 | Grok "Explain this post" hiding moved entirely to `twitter-ui-cleanup` (revision 2; its CSS is unchanged, only its role). `twitter-easy-block` (revision 4) no longer hides Grok or touches any X element; it adds its button as the first icon of the post header's icon group (`⊘ Grok ⋯`, or `⊘ ⋯` with 8.3 on) and of the profile header's button row (8.2.4, 8.2.7, 8.2.10, 8.3.1 #15, 8.3.4). |
 | 2026-11-09 | 0.4.1 | Spec only: removed the "Origin" field from the feature template (7) and from 8.1–8.3, and the matching sentence in constraint 11. No change to extension behavior. |
 | 2026-11-09 | 0.4.2 | Fix: `twitter-easy-block` (revision 5) burst appeared in the window's top-left corner after a feed block, because X had already dropped the button from the page when the burst was measured. The burst point is now recorded when the job starts and used if the button is gone; the post animation is skipped if X already removed the post (8.2.8). |
 | 2026-11-09 | 0.4.3 | Fix: `twitter-easy-block` (revision 6) post button no longer adds space between a post's header and its content. It keeps its 34 px circle but has `margin: -7px 0`, so it takes 20 px of layout height like X's own icons (8.2.5). Before, it stretched the header row by 14 px. |
+| 2026-11-09 | 0.4.3 | Docs only: the project root is the extension's only source and is loaded directly (section 9 rewritten: 9.1 Install, 9.2 Update after a change). Added `README.md`, a short human guide (section 4). No change to extension behavior. |

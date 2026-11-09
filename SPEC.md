@@ -65,8 +65,7 @@ aren't released yet are tested by loading the project root, which loads as-is
 11. **Self-contained spec.** This spec never links to external sources
     (repositories, gists, articles, docs pages) as a basis for requirements,
     because they can disappear. When a feature is inspired by outside work, its
-    relevant behavior is written out here in full. An origin may be named in
-    plain words for context, never as a link the spec depends on.
+    relevant behavior is written out here in full.
 
 ## 4. Project layout
 
@@ -139,7 +138,7 @@ Current manifest (the version must match section 11):
 {
   "manifest_version": 3,
   "name": "Bestest Chrome Extension",
-  "version": "0.3.0",
+  "version": "0.4.3",
   "description": "Personal site customizations, loaded unpacked.",
   "minimum_chrome_version": "111",
   "permissions": ["storage", "scripting"],
@@ -246,8 +245,8 @@ of the Matches column. Every feature is enabled by default (5.2).
 | ID | Title | Site | Matches | Files | World | run_at | Revision |
 |---|---|---|---|---|---|---|---|
 | `twitter-media-grid-restore` | Twitter media grid restore | x.com | `https://x.com/*` | js: `features/x.com/twitter-media-grid-restore.js` | MAIN | `document_start` | 1 |
-| `twitter-easy-block` | Twitter Easy Block | x.com | `https://x.com/*` | js: `features/x.com/twitter-easy-block.js` | MAIN | `document_idle` | 1 |
-| `twitter-ui-cleanup` | Twitter UI Cleanup | x.com | `https://x.com/*` | css: `features/x.com/twitter-ui-cleanup.css` | ISOLATED | `document_start` | 1 |
+| `twitter-easy-block` | Twitter Easy Block | x.com | `https://x.com/*` | js: `features/x.com/twitter-easy-block.js` | MAIN | `document_idle` | 6 |
+| `twitter-ui-cleanup` | Twitter UI Cleanup | x.com | `https://x.com/*` | css: `features/x.com/twitter-ui-cleanup.css` | ISOLATED | `document_start` | 2 |
 
 **Revision** is a per-feature integer, bumped whenever that feature's behavior
 changes. MAIN-world features expose it in their verification marker so the
@@ -274,7 +273,6 @@ owner can confirm the reloaded code is the new code.
 ### 8.N <Feature title> (`<feature-id>`)
 
 - Goal:           what the owner sees change, in one or two sentences.
-- Origin:         where the idea came from, in plain words (no links), or "original".
 - Matches:        URL match patterns.
 - World / run_at: ISOLATED|MAIN, document_start|document_end|document_idle.
 - Permissions:    none, or each one with its justification.
@@ -313,8 +311,6 @@ shape can never throw into the site's code.
 - **Goal:** On X (formerly Twitter) profile pages, the **Media** tab shows the
   legacy compact media grid (thumbnail gallery) instead of X's redesigned
   layout (full post cards / media carousel).
-- **Origin:** Idea from a third-party open-source extension (2026). Not
-  needed for implementation; this section defines everything.
 - **Matches:** `https://x.com/*`
 - **World / run_at:** MAIN / `document_start`
 - **Permissions:** none.
@@ -413,14 +409,16 @@ flags, the feature silently does nothing and X renders its default layout.
 ### 8.2 Twitter Easy Block (`twitter-easy-block`)
 
 - **Goal:** Every post on X (formerly Twitter) whose author the owner does not
-  follow gets a one-click **block button** where X's Grok "Explain this post"
-  icon was (that icon is hidden on every post). One click starts a 1-second
+  follow gets a one-click **block button** as the first (leftmost) icon in the
+  post header's icon group, before X's Grok "Explain this post" icon and the
+  `⋯` menu. This feature never hides or changes X's own icons; hiding the Grok
+  icon is Twitter UI Cleanup's job (8.3.1 #15). One click starts a 1-second
   safety countdown, and a second click cancels it. When the countdown finishes,
   the author is blocked through X's own UI, with no visible menu or
   confirmation dialog, followed by an explosion animation as the post collapses
-  out of the feed.
-- **Origin:** Owner-provided design (Nov 2026). This section defines
-  everything.
+  out of the feed. A profile page of an account the owner does not follow gets
+  the same button as the first icon of the profile header's button row,
+  directly left of its `⋯` button (8.2.10).
 - **Matches:** `https://x.com/*` (twitter.com redirects to x.com, so it is not
   matched).
 - **World / run_at:** MAIN / `document_idle`. MAIN is required because the
@@ -444,7 +442,7 @@ script, so they can be updated in one place when X changes.
 | `MAX_FIBER_DEPTH` | `40` |
 | `POLL_MS` | `40`. Polling interval of `wait()`. |
 | `MARKER` | `"__BESTEST_TWITTER_EASY_BLOCK__"` |
-| `REVISION` | `1`. Must equal the registry's Revision column. |
+| `REVISION` | `6`. Must equal the registry's Revision column. |
 
 DOM facts (verified on x.com, Nov 2026):
 
@@ -453,7 +451,7 @@ DOM facts (verified on x.com, Nov 2026):
 | Post | `article[data-testid="tweet"]` |
 | Virtualized timeline cell wrapping a post | `article.closest('[data-testid="cellInnerDiv"]')` |
 | Post's `⋯` menu button ("caret") | `article [data-testid="caret"]` |
-| Grok "Explain this post" button | `article button[aria-label="Grok actions"]` |
+| Grok "Explain this post" button | `article button[aria-label="Grok actions"]`. Used only to find the first icon (8.2.4); never hidden or changed by this feature. |
 | Popup layer root (menus, dialogs) | `#layers` |
 | Open dropdown menu | `#layers [role="menu"]` |
 | Menu items | `#layers [role="menu"] [role="menuitem"]` |
@@ -461,6 +459,8 @@ DOM facts (verified on x.com, Nov 2026):
 | Block confirmation dialog | `[data-testid="confirmationSheetDialog"]` |
 | Confirm button in that dialog | `[data-testid="confirmationSheetConfirm"]` |
 | Logged-in user's handle | text of `[data-testid="SideNav_AccountSwitcher_Button"]`, matched with `/@(\w+)/` |
+| Profile header's `⋯` button | `[data-testid="primaryColumn"] [data-testid="userActions"]` (aria-label "More"). Absent on the owner's own profile. Its parent is the header's button row (`⋯`, Message, Subscribe, Follow), a flex row. |
+| Profile header's `⋯` menu | Same `#layers [role="menu"]`; its Block item is `[data-testid="block"]` with text `Block @<handle>`, and the confirmation dialog is the same as for posts (8.2.6). |
 
 Every class, id, and keyframe name the feature creates starts with `teb-`:
 
@@ -468,11 +468,12 @@ Every class, id, and keyframe name the feature creates starts with `teb-`:
 |---|---|
 | `<style id="teb-style">` | The feature's stylesheet, appended to `document.head`. It is injected by the script (not a manifest `css` file) because its durations are generated from `TIMER_MS`. |
 | `.teb-btn` | The block button. |
+| `.teb-profile` | Added to the block button on a profile page (8.2.10). |
+| `--teb-fg`, `--teb-border` | Custom properties set inline on a profile button, copied from the profile's `⋯` button (8.2.10). |
 | `.teb-icon`, `.teb-ring`, `.teb-track`, `.teb-progress` | Parts of the button (8.2.5). |
 | `.teb-arming`, `.teb-working`, `.teb-cancel`, `.teb-fail` | Visual-state classes on the button (8.2.5). |
 | `html.teb-stealth` | Hides X's popups during a block job (8.2.6). |
 | `article[data-teb-blocked="1"]` | Post whose author this feature blocked. Skipped from then on. |
-| `.teb-grok-hidden` | Marks a Grok wrapper this feature hid with `display:none`. |
 
 #### 8.2.2 Startup
 
@@ -517,20 +518,36 @@ has no Block item on your own posts.
 - `user.following === false` (strictly; a missing field means no button).
 - `user.blocking !== true`.
 - `user.screen_name.toLowerCase()` ≠ the logged-in handle.
+- `user.screen_name.toLowerCase()` is not in the in-memory set of handles this
+  feature blocked since the page loaded. X doesn't update the user data of
+  other posts or of the profile header right away, so without this set the
+  author's other posts would keep their buttons.
 
-The Grok button is hidden on **every** post, followed accounts included.
+The same rule applies to the profile header's user (8.2.10).
 
 #### 8.2.4 Placement
 
-The Grok button and the caret each sit inside their own wrapper `div`.
+The block button is the **first icon** of the post header's icon group. The
+group is the Grok button and the caret, each inside its own wrapper `div`, in
+that order. The **anchor** is the group's first wrapper:
 
-- If the post has a Grok button: insert the block button as a sibling
-  **before** the Grok wrapper (`grok.parentElement`).
-- Otherwise insert it before the caret's wrapper (`caret.parentElement`).
+- If the post has a Grok button: the Grok wrapper (`grok.parentElement`).
+- Otherwise: the caret's wrapper (`caret.parentElement`).
 - If the post has neither, it gets no button.
 
-Hiding Grok means setting `display:none` on `grok.parentElement` and adding the
-class `teb-grok-hidden` to it.
+The block button is inserted as a sibling directly **before** the anchor. The
+result is `⊘ Grok ⋯` when the Grok icon is visible, and `⊘ ⋯` when Twitter UI
+Cleanup (8.3) hides it. The Grok wrapper keeps its place in the DOM while it's
+hidden, so the anchor is the same in both cases.
+
+The anchor is re-evaluated on every `update()` (8.2.7), not only when the button
+is created. X often renders a post's Grok button some time after its caret
+(posts loaded while scrolling the feed, and posts on `/status/…` pages,
+verified Nov 2026). The caret wrapper sits in a vertical column, so a button
+placed by the caret fallback stacks above the `⋯` instead of sitting in the
+header row, and with Grok visible it would also end up after Grok. When Grok
+appears later, the existing button is moved in front of the Grok wrapper
+(8.2.7 step 5).
 
 #### 8.2.5 Button, state machine, and visuals
 
@@ -547,6 +564,14 @@ class `teb-grok-hidden` to it.
 - Button: 34×34 px, `border-radius: 9999px`, transparent background, no border,
   no padding, `position: relative`, contents centered, `cursor: pointer`. Idle
   icon color: `#71767b` (X's gray).
+- **No layout change.** On posts the button has `margin: -7px 0`, so it takes
+  only 20 px of layout height, the same as X's own header icons (the Grok and
+  caret wrappers are 20 px tall). The 34 px circle and ring still draw in
+  full, overflowing the header row by 7 px above and below, which is how X
+  draws its own hover circles. Without this, the button stretched the header
+  row from 20 to 34 px and pushed the post content down by 14 px (measured on
+  live x.com, Nov 2026). The profile button (`.teb-profile`, 8.2.10) keeps its
+  own margins, because it sits in a row of 36 px buttons.
 - Idle hover: icon `#f4212e` on background `rgba(244,33,46,.1)`.
 - Icon (`.teb-icon`): 18.75×18.75 px, the "no" symbol, all strokes in
   `currentColor`: `viewBox="0 0 24 24"`, a circle (`cx=12 cy=12 r=9`) and a line
@@ -614,8 +639,9 @@ background). Otherwise `fire()` sets `data-state="working"` (class
 `.teb-working`) and enqueues the block job (8.2.6) for this button's article
 and `data-handle`.
 
-- On success: set `data-teb-blocked="1"` on the article, then run the
-  celebration (8.2.8).
+- On success: set `data-teb-blocked="1"` on the article, add the handle
+  (lowercased) to the blocked-handles set (8.2.3), then run the celebration
+  (8.2.8).
 - On failure: set `data-state=""` and play `.teb-fail`.
 
 **Serial queue.** Jobs never compete for X's single menu layer; they run one at
@@ -686,16 +712,22 @@ flash its menu on screen.
   subtree:true}` schedules a scan on every change.
 - **Throttle with `requestAnimationFrame`:** at most one scan per frame.
   Without it, scrolling gets sluggish.
-- A scan calls `update(article)` for every `article[data-testid="tweet"]`.
+- A scan calls `update(article)` for every `article[data-testid="tweet"]`,
+  then `updateProfile()` once (8.2.10).
 - `update(article)` is idempotent:
-  1. Hide the Grok wrapper if it isn't hidden yet.
-  2. If `data-teb-blocked="1"`, stop.
-  3. Apply the show rule (8.2.3). Let `btn` be the article's existing
+  1. If `data-teb-blocked="1"`, stop.
+  2. Apply the show rule (8.2.3). Let `btn` be the article's existing
      `.teb-btn`.
-  4. Qualifies and there's no `btn`: create and place one (8.2.4).
-  5. Qualifies, `btn` is idle, and its `data-handle` differs from the current
+  3. Qualifies and there's no `btn`: create and place one (8.2.4).
+  4. Qualifies, `btn` is idle, and its `data-handle` differs from the current
      `screen_name` (the article was reused for another post): update
      `data-handle`, `aria-label`, and `title`.
+  5. Qualifies, `btn` is idle, and `btn.nextElementSibling` isn't the current
+     anchor (8.2.4: the Grok wrapper if the post has one, otherwise the caret
+     wrapper): move `btn` with `anchor.parentElement.insertBefore(btn, anchor)`.
+     Moving keeps the element, its click listener, and its state. Only idle
+     buttons are moved, because re-inserting an element restarts its CSS
+     animations (an arming ring would visibly start over).
   6. Doesn't qualify and `btn` exists: if `btn` is `"working"`, leave it.
      Otherwise clear its timer (if arming) and remove it. This happens, for
      example, right after the owner follows the author.
@@ -705,8 +737,23 @@ flash its menu on screen.
 #### 8.2.8 Block celebration (Web Animations API)
 
 Every effect is a `div` with `position:fixed; pointer-events:none;
-z-index:2147483647`, appended to `document.body`, centered on the button's
-on-screen center, and removed when its animation finishes.
+z-index:2147483647`, appended to `document.body`, centered on the **burst
+point**, and removed when its animation finishes.
+
+**Burst point.** By the time a block succeeds, X has often re-rendered the
+blocked post (or the profile header) and dropped the block button from the
+page. A detached or hidden element measures as 0×0 at (0,0), which put the
+burst in the window's top-left corner (seen on live x.com, Nov 2026). So:
+
+- When the job starts (before step 1 of 8.2.6), record the button's on-screen
+  center.
+- On success, if the button is still in the page and has a non-zero size, use
+  its current center (it may have moved if the owner scrolled). Otherwise use
+  the center recorded at job start.
+- If neither is available (the button was already gone when the job started),
+  skip items 1–3.
+- Item 4 runs only if the article is still in the page. If X already removed
+  or replaced it, there's nothing left to collapse.
 
 1. **Flash core.** A 34 px circle filled with
    `radial-gradient(circle,#fff 0%,#ffd400 35%,#f4212e 70%,transparent 72%)`,
@@ -761,6 +808,71 @@ on-screen center, and removed when its animation finishes.
   2) instead of blocking someone else.
 - **Focused-post pages (`/status/…`):** the main post and the replies are all
   `article[data-testid="tweet"]` and work the same way.
+- **Grok button rendered after the caret:** the button is first placed before
+  the caret wrapper, then moved in front of the Grok wrapper once it appears
+  (8.2.4, 8.2.7 step 5).
+- **Twitter UI Cleanup (8.3) off:** the Grok icon stays visible and the header
+  shows `⊘ Grok ⋯`. That's one icon wider than with 8.3 on, and expected.
+- **Author blocked from one place:** their other posts, and their profile
+  header, lose the button on the next scan (the blocked-handles set, 8.2.3).
+
+#### 8.2.10 Profile pages
+
+On `https://x.com/<handle>` and its tabs (`/media`, `/with_replies`, …), the
+profile header gets a block button when its user qualifies.
+
+**Reading the user.** Start at the profile's `⋯` button (8.2.1) and walk up
+the React fiber `.return` chain at most `MAX_FIBER_DEPTH` levels. The first
+`memoizedProps.user` that has a string `screen_name` is the profile's user (it
+was found about 9 levels up, with props `{ buttonStyle, promotedContent, user }`).
+It has the same `following` and `blocking` fields as a post's user. The show
+rule (8.2.3) decides whether the button is shown.
+
+**Placement and look.** The `⋯` button is the first icon of the header's
+button row, so the block button is inserted as a sibling directly **before**
+it. That makes the block button the row's first icon, immediately left of
+`⋯`. It is the same `.teb-btn` (same icon, ring, states, and animations,
+8.2.5) with the extra class `.teb-profile`, which makes it match X's round
+header buttons:
+
+- 36×36 px, `margin: 0 8px 12px 0` (the same as X's header buttons), border
+  `1px solid var(--teb-border, rgb(207,217,222))`.
+- Idle icon color `var(--teb-fg, #0f1419)`, and the icon is 20×20 px.
+- `--teb-fg` and `--teb-border` are set inline on the button from the `⋯`
+  button's computed `color` and `border-top-color` on every `updateProfile()`,
+  so the button follows X's light, dim, and dark themes.
+- The idle hover style, `.teb-arming`, `.teb-working`, `.teb-cancel`, and
+  `.teb-fail` override these exactly as on posts. The progress ring fits
+  inside the border.
+
+**`updateProfile()`**, idempotent:
+
+1. Find the profile's `⋯` button. Let `btn` be the `.teb-btn.teb-profile` in
+   its parent row.
+2. Any other `.teb-btn.teb-profile` in the document that isn't `"working"`
+   (for example one left over from the previous profile after in-app
+   navigation) has its timer cleared and is removed.
+3. No `⋯` button: stop.
+4. Apply the show rule to the profile's user.
+5. Qualifies and there's no `btn`: create one and insert it before `⋯`.
+6. Qualifies and `btn` is idle: relabel it if the handle changed (X reused the
+   header for another profile), and move it in front of `⋯` if it isn't
+   directly there.
+7. Doesn't qualify and `btn` exists and isn't `"working"`: clear its timer and
+   remove it.
+
+**Countdown and block.** The click, countdown, and cancel behavior is the same
+as for posts (8.2.5). The job's root is the header row (the button's parent
+when the countdown started) instead of an article, and its "caret" is that
+row's `⋯` button. Everything else in 8.2.6 is unchanged, including the
+handle check against the menu item's text. When the countdown ends, `fire()`
+re-applies the show rule to the profile's user; if it no longer qualifies, it
+resets the button and runs `updateProfile()` instead of blocking.
+
+**On success:** add the handle to the blocked-handles set (8.2.3), play the
+flash, shockwaves, and shards (8.2.8 items 1–3) centered on the burst point
+(8.2.8), and remove the button. There is no post to jolt or collapse. X then shows its own
+blocked state in the header. **On failure:** the same shake as on posts.
 
 **Must not:**
 
@@ -769,8 +881,11 @@ on-screen center, and removed when its animation finishes.
 - Block when the menu's Block item doesn't name the captured handle.
 - Leave `teb-stealth` on `<html>`, or an X menu open, after a job.
 - Throw into the page or log to the console.
-- Touch posts other than to hide Grok, add or remove its button, and animate a
-  post it just blocked.
+- Hide, restyle, or move any of X's own elements (including the Grok icon).
+- Touch posts other than to add, move, relabel, or remove its own button, and
+  animate a post it just blocked.
+- Touch the profile header other than to add, move, relabel, or remove its own
+  button, or show a button on the owner's own profile.
 
 **Failure mode.** X's selectors and fiber depth can change at any time. If
 `postUser()` returns `null`, or a post has no caret or Grok button, that post
@@ -793,16 +908,18 @@ Unblocking uses `blocks/destroy.json`.
 **Verification.** Blocking is real, so test on accounts you're fine blocking,
 and unblock them afterwards from their profile pages.
 
-1. On the Home feed, posts by accounts you don't follow show the slash icon
-   where the Grok icon was. Posts by followed accounts and your own posts show
-   neither icon.
+1. On the Home feed, posts by accounts you don't follow show the slash icon as
+   the first icon of the header's icon group. Posts by followed accounts and
+   your own posts have no slash icon. (With 8.3 on, the group is `⊘ ⋯`, or
+   just `⋯` on posts without the button.)
 2. Hovering turns the icon red on a faint red circle.
 3. Click once: the ring fills while the color goes yellow → orange → red, with
    a speeding pulse and no number. Click again within 1 s: the shrink/gray
    cancel animation plays, and DevTools → Network shows no `blocks/create.json`
    request.
 4. Click once and wait: after 1 s, no menu or dialog is visible. You see the
-   flash, two shockwaves, and the shard burst, and the post jolts, burns out,
+   flash, two shockwaves, and the shard burst centered on the post's block
+   button (never in the window's corner), and the post jolts, burns out,
    and collapses. Network shows `POST /i/api/1.1/blocks/create.json` with
    `user_id=<id_str>`.
 5. Reload: the author's posts are gone or shown as blocked, and their profile
@@ -811,14 +928,48 @@ and unblock them afterwards from their profile pages.
    the other, with no stray menus.
 7. After a block or a cancel, `<html>` has no `teb-stealth` class and there's
    no `#layers [role="menu"]` in the DOM.
-8. Scrolling a long feed stays smooth, and newly loaded posts get buttons.
+8. **No extra space:** a post with a block button has the same gap between
+   its header (name line) and its text as a post without one, and the same as
+   when the feature is off. The button's center lines up with the `⋯`'s
+   center.
+   Scrolling a long feed stays smooth, and newly loaded posts get buttons. On
+   every post, in the feed and on a `/status/…` page, the button sits in the
+   header row as the first icon, never stacked above the `⋯`. In the console,
+   this returns `0` (posts whose button isn't directly before their Grok
+   wrapper):
+   ```js
+   [...document.querySelectorAll('article .teb-btn')].filter(b => {
+     const g = b.closest('article').querySelector('button[aria-label="Grok actions"]');
+     return g && b.nextElementSibling !== g.parentElement;
+   }).length
+   ```
 9. In the DevTools console, `window.__BESTEST_TWITTER_EASY_BLOCK__` returns
-   `{ id: "twitter-easy-block", revision: 1 }`. The console shows no errors
+   `{ id: "twitter-easy-block", revision: 6 }`. The console shows no errors
    whose source is `features/x.com/twitter-easy-block.js`.
 10. Feature 8.1 still works on a profile's Media tab (both features coexist).
 11. Switch this feature off in the popup and click **Reload tabs**: no block
-    buttons appear, and the Grok icons come back (unless 8.3 is on, which hides
-    them on its own). Switch it back on and reload: the buttons return.
+    buttons appear, and the Grok icons are unchanged (hidden if 8.3 is on,
+    visible if it's off). Switch it back on and reload: the buttons return.
+12. **With 8.3 off:** switch Twitter UI Cleanup off and reload. Posts by
+    accounts you don't follow show `⊘ Grok ⋯` in one row, including posts
+    loaded while scrolling. Posts by followed accounts show `Grok ⋯`. Switch
+    8.3 back on and reload: `⊘ ⋯`.
+13. **Profile, not followed:** open the profile of an account you don't follow.
+    A round block button is the first icon of the header's button row,
+    directly left of `⋯`, the same size
+    and border as `⋯`, aligned with it. Hover turns it red. A click and a second
+    click within 1 s cancel it, with no `blocks/create.json` request.
+14. **Profile, followed / own / blocked:** on an account you follow, on your
+    own profile, and on an account you've already blocked, there's no button.
+    Follow an account from its profile: the button disappears. Unfollow: it
+    comes back.
+15. **Profile, in-app navigation:** move from one profile to another by
+    clicking links (no reload). There's only ever one profile button, and its
+    label names the profile you're on.
+16. **Profile, block** (on an account you're fine blocking): click once and
+    wait. No menu or dialog shows, the burst plays at the button, the button
+    disappears, X shows the account as blocked, and the account's posts lower
+    on the page lose their block buttons. Unblock afterwards.
 
 ### 8.3 Twitter UI Cleanup (`twitter-ui-cleanup`)
 
@@ -826,8 +977,6 @@ and unblock them afterwards from their profile pages.
   routes, every viewport width, and after every in-app navigation or
   re-render. Pages behind hidden links stay reachable by URL. The feature only
   hides elements. It never blocks requests or removes nodes.
-- **Origin:** Owner-provided design (Nov 2026). This section defines
-  everything.
 - **Matches:** `https://x.com/*`
 - **World / run_at:** CSS only, so there's no script and no world (registered
   as ISOLATED) / `document_start`, so nothing flashes into view on load.
@@ -876,7 +1025,7 @@ card on post pages).
 
 | # | Element | Notes |
 |---|---|---|
-| 15 | Grok "Explain this post" button | in each post's header, next to the `⋯` menu. When Twitter Easy Block (8.2) is on, its block button takes this spot. |
+| 15 | Grok "Explain this post" button | in each post's header, next to the `⋯` menu. This feature is the only one that hides it. Twitter Easy Block (8.2) puts its block button before it as the first icon, so with both on the header shows `⊘ ⋯`. |
 
 #### 8.3.2 The stylesheet
 
@@ -980,7 +1129,9 @@ and that must stay.
   with `querySelector` to place its own button before the Grok wrapper. That
   still works while the button is hidden, because hidden elements stay in the
   DOM. The block button is inserted next to the wrapper, not inside it, so
-  rule #15 doesn't hide it. Either feature alone hides the Grok icon.
+  rule #15 doesn't hide it. This feature is the only one that hides the Grok
+  icon: 8.2 never hides it, so switching 8.3 off brings the icon back
+  (`⊘ Grok ⋯`).
 
 #### 8.3.5 Open checks during build
 
@@ -1035,11 +1186,11 @@ either way.
 8. **Medium width** (icon-only sidebar): the same nav icons are hidden.
 9. **Narrow width / mobile emulation:** no Notifications, Chat or Grok in the
    bottom bar, and no floating compose button.
-10. **With Twitter Easy Block (8.2) on:** its block button sits where the Grok
-    icon was, and blocking still works.
+10. **With Twitter Easy Block (8.2) on:** its block button is the first icon
+    (`⊘ ⋯`), with no gap where Grok was, and blocking still works.
 11. Switch this feature off in the popup and click **Reload tabs**: every
-    hidden element is visible again. Switch it back on and reload: hidden
-    again.
+    hidden element is visible again, including the Grok icon in posts even
+    while 8.2 is on (`⊘ Grok ⋯`). Switch it back on and reload: hidden again.
 
 ## 9. Install, update, remove
 
@@ -1123,7 +1274,7 @@ the extension card (manifest and service-worker problems appear there).
 
 ## 11. Version and changelog
 
-Current extension version: **0.3.0**
+Current extension version: **0.4.3**
 
 | Date | Version | Change |
 |---|---|---|
@@ -1133,3 +1284,9 @@ Current extension version: **0.3.0**
 | 2026-11-03 | 0.3.0 | First implementation of the shell and all three features. Clarified during the build: Easy Block re-checks the show rule when the countdown ends (8.2.5), and back-to-back block jobs keep X's popups hidden (8.2.6). Not yet verified on live x.com; the 8.3.5 open checks are still open. |
 | 2026-11-03 | 0.3.0 | Added `release/` (the production release, rebuilt only when the owner asks) and `build-release.ps1` (9.1). No change to extension behavior. |
 | 2026-11-03 | 0.3.0 | Released 0.3.0 to release/. |
+| 2026-11-09 | 0.3.1 | Fix: `twitter-easy-block` (revision 2) re-places an idle block button in front of the Grok wrapper when X renders Grok after the caret, so the button no longer stacks above `⋯` on scrolled-in feed posts and `/status/…` pages (8.2.4, 8.2.7, 8.2.9). Live check on 0.3.0 before the fix: 32 of 36 posts loaded while scrolling were misplaced. |
+| 2026-11-09 | 0.4.0 | `twitter-easy-block` (revision 3): profile pages of accounts you don't follow get the block button directly left of the header's `⋯` (new 8.2.10). Handles blocked during the page session lose their buttons everywhere on the page (8.2.3). Minor bump because this adds behavior rather than fixing it. |
+| 2026-11-09 | 0.4.1 | Grok "Explain this post" hiding moved entirely to `twitter-ui-cleanup` (revision 2; its CSS is unchanged, only its role). `twitter-easy-block` (revision 4) no longer hides Grok or touches any X element; it adds its button as the first icon of the post header's icon group (`⊘ Grok ⋯`, or `⊘ ⋯` with 8.3 on) and of the profile header's button row (8.2.4, 8.2.7, 8.2.10, 8.3.1 #15, 8.3.4). |
+| 2026-11-09 | 0.4.1 | Spec only: removed the "Origin" field from the feature template (7) and from 8.1–8.3, and the matching sentence in constraint 11. No change to extension behavior. |
+| 2026-11-09 | 0.4.2 | Fix: `twitter-easy-block` (revision 5) burst appeared in the window's top-left corner after a feed block, because X had already dropped the button from the page when the burst was measured. The burst point is now recorded when the job starts and used if the button is gone; the post animation is skipped if X already removed the post (8.2.8). |
+| 2026-11-09 | 0.4.3 | Fix: `twitter-easy-block` (revision 6) post button no longer adds space between a post's header and its content. It keeps its 34 px circle but has `margin: -7px 0`, so it takes 20 px of layout height like X's own icons (8.2.5). Before, it stretched the header row by 14 px. |

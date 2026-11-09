@@ -8,7 +8,7 @@
   const MAX_FIBER_DEPTH = 40;
   const POLL_MS = 40;
   const MARKER = "__BESTEST_TWITTER_EASY_BLOCK__";
-  const REVISION = 1;
+  const REVISION = 6;
 
   const SEL = {
     post: 'article[data-testid="tweet"]',
@@ -21,6 +21,9 @@
     confirmDialog: '[data-testid="confirmationSheetDialog"]',
     confirmButton: '[data-testid="confirmationSheetConfirm"]',
     accountSwitcher: '[data-testid="SideNav_AccountSwitcher_Button"]',
+    profileActions: '[data-testid="primaryColumn"] [data-testid="userActions"]',
+    rowActions: '[data-testid="userActions"]',
+    profileBtn: ".teb-btn.teb-profile",
   };
 
   const VISUAL_CLASSES = ["teb-arming", "teb-working", "teb-cancel", "teb-fail"];
@@ -32,9 +35,11 @@
   // Countdown durations come from TIMER_MS, never hard-coded.
   const T = `${TIMER_MS}ms`;
   const CSS = `
-.teb-btn{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;margin:0;padding:0;border:0;border-radius:9999px;background:transparent;color:#71767b;cursor:pointer}
+.teb-btn{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;margin:-7px 0;padding:0;border:0;border-radius:9999px;background:transparent;color:#71767b;cursor:pointer}
+.teb-btn.teb-profile{width:36px;height:36px;margin:0 8px 12px 0;border:1px solid var(--teb-border,rgb(207,217,222));color:var(--teb-fg,#0f1419)}
 .teb-btn[data-state=""]:hover{color:#f4212e;background:rgba(244,33,46,.1)}
 .teb-icon{width:18.75px;height:18.75px}
+.teb-profile .teb-icon{width:20px;height:20px}
 .teb-icon circle,.teb-icon line{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 .teb-ring{position:absolute;inset:0;width:34px;height:34px;transform:rotate(-90deg);opacity:0;pointer-events:none}
 .teb-ring circle{fill:none;stroke-width:2.5}
@@ -83,16 +88,71 @@ html.teb-stealth #layers [data-testid="mask"]{opacity:0!important;pointer-events
     return ownHandle;
   }
 
-  // Returns the author's screen_name when the post qualifies for a button.
-  function qualifyingHandle(article) {
-    const user = postUser(article);
+  // Profile header's user (8.2.10): first fiber up from its ⋯ button whose
+  // props carry a user with a screen_name.
+  function profileUser(actions) {
+    const key = Object.keys(actions).find((k) => k.startsWith("__reactFiber"));
+    let f = key && actions[key];
+    for (let d = 0; f && d < MAX_FIBER_DEPTH; d++, f = f.return) {
+      const u = f.memoizedProps?.user;
+      if (typeof u?.screen_name === "string") return u;
+    }
+    return null;
+  }
+
+  // Handles (lowercased) this feature blocked since the page loaded (8.2.3).
+  const blockedHandles = new Set();
+
+  // Show rule (8.2.3): the user's screen_name when it qualifies, else null.
+  function qualify(user) {
     if (!user || user.following !== false || user.blocking === true) return null;
     const handle = user.screen_name;
     if (typeof handle !== "string" || !handle) return null;
+    const lower = handle.toLowerCase();
     const own = getOwnHandle();
-    if (own && handle.toLowerCase() === own) return null;
+    if (own && lower === own) return null;
+    if (blockedHandles.has(lower)) return null;
     return handle;
   }
+
+  const qualifyingHandle = (article) => qualify(postUser(article));
+  const profileHandle = (actions) => (actions ? qualify(profileUser(actions)) : null);
+
+  // A button lives on a post (root: its article) or in a profile header
+  // (root: the header's button row). Each kind knows how to re-check and
+  // re-render its root, find its ⋯ button, and finish a successful block.
+  const POST = {
+    root: (btn) => btn.closest(SEL.post),
+    handle: (root) => qualifyingHandle(root),
+    refresh: (root) => update(root),
+    caret: (root) => root.querySelector(SEL.caret),
+    done(btn, root, at) {
+      root.dataset.tebBlocked = "1";
+      if (at) burst(at.x, at.y);
+      // X may already have removed or replaced the post (8.2.8).
+      if (root.isConnected) removePost(root).catch(() => {});
+    },
+  };
+  const PROFILE = {
+    root: (btn) => btn.parentElement,
+    handle: (root) => profileHandle(root.querySelector(SEL.rowActions)),
+    refresh: () => updateProfile(),
+    caret: (root) => root.querySelector(SEL.rowActions),
+    done(btn, root, at) {
+      if (at) burst(at.x, at.y);
+      btn.remove();
+    },
+  };
+
+  // On-screen center of an element still in the page with a real size, else
+  // null. A detached or hidden element measures 0×0 at (0,0) (8.2.8).
+  function centerOf(el) {
+    if (!el?.isConnected) return null;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+  const kindOf = (btn) => (btn.classList.contains("teb-profile") ? PROFILE : POST);
 
   // ── Button (8.2.5) ─────────────────────────────────────────────────────
   const timers = new WeakMap();
@@ -109,10 +169,10 @@ html.teb-stealth #layers [data-testid="mask"]{opacity:0!important;pointer-events
     btn.title = `Block @${handle} (click again to cancel)`;
   }
 
-  function createButton(handle) {
+  function createButton(handle, profile = false) {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "teb-btn";
+    btn.className = profile ? "teb-btn teb-profile" : "teb-btn";
     btn.dataset.state = "";
     setHandle(btn, handle);
 
@@ -158,12 +218,13 @@ html.teb-stealth #layers [data-testid="mask"]{opacity:0!important;pointer-events
   }
 
   function arm(btn) {
-    const article = btn.closest(SEL.post);
+    const kind = kindOf(btn);
+    const root = kind.root(btn);
     const handle = btn.dataset.handle;
-    if (!article || !handle) return;
+    if (!root || !handle) return;
     btn.dataset.state = "arming";
     setVisual(btn, "teb-arming");
-    timers.set(btn, setTimeout(() => fire(btn, article, handle), TIMER_MS));
+    timers.set(btn, setTimeout(() => fire(btn, kind, root, handle), TIMER_MS));
   }
 
   function cancel(btn) {
@@ -172,25 +233,28 @@ html.teb-stealth #layers [data-testid="mask"]{opacity:0!important;pointer-events
     setVisual(btn, "teb-cancel");
   }
 
-  function fire(btn, article, handle) {
+  function fire(btn, kind, root, handle) {
     try {
       timers.delete(btn);
       // Re-check the show rule now, independent of when the last scan ran
       // (e.g. the owner followed the author during the countdown).
-      if (qualifyingHandle(article) !== handle) {
+      if (kind.handle(root) !== handle) {
         btn.dataset.state = "";
         setVisual(btn, null);
-        update(article);
+        kind.refresh(root);
         return;
       }
       btn.dataset.state = "working";
       setVisual(btn, "teb-working");
       enqueue(async () => {
-        const ok = await blockViaUi(article, handle);
+        // Burst point (8.2.8): recorded now, while the button is surely in the
+        // page; X often drops it by the time the block succeeds.
+        const startAt = centerOf(btn);
+        const ok = await blockViaUi(root, kind.caret, handle);
         try {
           if (ok) {
-            article.dataset.tebBlocked = "1";
-            celebrate(btn, article);
+            blockedHandles.add(handle.toLowerCase());
+            kind.done(btn, root, centerOf(btn) || startAt);
           } else {
             btn.dataset.state = "";
             setVisual(btn, "teb-fail");
@@ -253,17 +317,18 @@ html.teb-stealth #layers [data-testid="mask"]{opacity:0!important;pointer-events
     }, 150);
   }
 
-  async function blockViaUi(article, handle) {
+  // root: the post's article, or the profile header's button row.
+  async function blockViaUi(root, findCaret, handle) {
     stealthOn();
     try {
-      if (!article.isConnected) return false;
+      if (!root.isConnected) return false;
 
       if (document.querySelector(SEL.menu)) {
         closeMenu();
         await wait(() => !document.querySelector(SEL.menu), 1000);
       }
 
-      const caret = article.querySelector(SEL.caret);
+      const caret = findCaret(root);
       if (!caret) return false;
       caret.click();
 
@@ -405,32 +470,68 @@ html.teb-stealth #layers [data-testid="mask"]{opacity:0!important;pointer-events
     target.style.display = "none";
   }
 
-  function celebrate(btn, article) {
-    const rect = btn.getBoundingClientRect();
-    burst(rect.left + rect.width / 2, rect.top + rect.height / 2);
-    removePost(article).catch(() => {});
-  }
-
   // ── Keeping up with the SPA (8.2.7) ────────────────────────────────────
   function update(article) {
-    const grokWrap = article.querySelector(SEL.grok)?.parentElement;
-    if (grokWrap && !grokWrap.classList.contains("teb-grok-hidden")) {
-      grokWrap.style.display = "none";
-      grokWrap.classList.add("teb-grok-hidden");
-    }
-
     if (article.dataset.tebBlocked === "1") return;
 
     const handle = qualifyingHandle(article);
     const btn = article.querySelector(".teb-btn");
 
     if (handle) {
+      // First icon of the header's icon group (8.2.4): before Grok's wrapper,
+      // else before the caret's. Grok is never hidden here; 8.3 does that.
+      const anchor =
+        article.querySelector(SEL.grok)?.parentElement ||
+        article.querySelector(SEL.caret)?.parentElement;
       if (!btn) {
-        const anchor = grokWrap || article.querySelector(SEL.caret)?.parentElement;
         if (!anchor?.parentElement) return;
         anchor.parentElement.insertBefore(createButton(handle), anchor);
-      } else if (btn.dataset.state === "" && btn.dataset.handle !== handle) {
-        setHandle(btn, handle); // the article was reused for another post
+      } else if (btn.dataset.state === "") {
+        if (btn.dataset.handle !== handle) {
+          setHandle(btn, handle); // the article was reused for another post
+        }
+        // X often renders Grok after the caret; move the button next to it
+        // (8.2.4). Idle only: re-inserting restarts CSS animations.
+        if (anchor?.parentElement && btn.nextElementSibling !== anchor) {
+          anchor.parentElement.insertBefore(btn, anchor);
+        }
+      }
+    } else if (btn && btn.dataset.state !== "working") {
+      clearTimer(btn);
+      btn.remove();
+    }
+  }
+
+  // Profile header button (8.2.10). Idempotent.
+  function updateProfile() {
+    const actions = document.querySelector(SEL.profileActions);
+    const row = actions?.parentElement;
+    let btn = null;
+    for (const b of document.querySelectorAll(SEL.profileBtn)) {
+      if (row && b.parentElement === row && !btn) btn = b;
+      else if (b.dataset.state !== "working") {
+        clearTimer(b);
+        b.remove(); // left over from another profile
+      }
+    }
+    if (!actions || !row) return;
+
+    const handle = profileHandle(actions);
+    if (handle) {
+      if (!btn) {
+        btn = createButton(handle, true);
+        row.insertBefore(btn, actions);
+      } else if (btn.dataset.state === "") {
+        if (btn.dataset.handle !== handle) setHandle(btn, handle);
+        if (btn.nextElementSibling !== actions) row.insertBefore(btn, actions);
+      }
+      // Follow X's theme: copy the ⋯ button's colors.
+      const cs = getComputedStyle(actions);
+      if (btn.style.getPropertyValue("--teb-fg") !== cs.color) {
+        btn.style.setProperty("--teb-fg", cs.color);
+      }
+      if (btn.style.getPropertyValue("--teb-border") !== cs.borderTopColor) {
+        btn.style.setProperty("--teb-border", cs.borderTopColor);
       }
     } else if (btn && btn.dataset.state !== "working") {
       clearTimer(btn);
@@ -445,6 +546,11 @@ html.teb-stealth #layers [data-testid="mask"]{opacity:0!important;pointer-events
       } catch {
         // Fail closed for this post only.
       }
+    }
+    try {
+      updateProfile();
+    } catch {
+      // Fail closed for the profile header only.
     }
   }
 
